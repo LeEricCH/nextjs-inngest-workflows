@@ -6,6 +6,9 @@
 
 ![Inngest Blog Editor by Eric](./blog-editor.png)
 
+https://github.com/user-attachments/assets/d8804d35-0564-4389-b7fa-58f88d702cfd
+
+
 </p>
 
 This demo is a Next.js blog back-office featuring enhanced AI workflows with a significantly improved user interface. Key updates include:
