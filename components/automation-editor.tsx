@@ -1,6 +1,6 @@
 "use client";
-import { ReactFlow, Background, Controls, ReactFlowProvider, Panel, useReactFlow, Node, NodeMouseHandler, Connection, Edge, OnConnectStartParams, XYPosition, NodeChange, MiniMap, useOnSelectionChange, SelectionMode, PanOnScrollMode, ConnectionMode } from 'reactflow';
-import { SaveIcon, TrashIcon, HandIcon, MousePointerClick } from "lucide-react";
+import { ReactFlow, Background, Controls, ReactFlowProvider, Panel, useReactFlow, Node, NodeMouseHandler, Connection, OnConnectStartParams, XYPosition, NodeChange, useOnSelectionChange, SelectionMode, ConnectionMode } from 'reactflow';
+import { SaveIcon, TrashIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -9,15 +9,13 @@ import { cn } from "@/lib/utils";
 
 import { type Workflow } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
-import { updateWorkflow, toggleWorkflow, deleteWorkflow } from "@/app/actions";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { updateWorkflow, deleteWorkflow } from "@/app/actions";
 import { useFlowStore } from "@/lib/flow/store";
 import ActionNode from "@/lib/flow/nodes/ActionNode";
 import TriggerNode from "@/lib/flow/nodes/TriggerNode";
 import { NODE_TYPES, hasDuplicateConnection } from "@/lib/flow/utils";
 import { SidebarWrapper } from "@/lib/flow/components/SidebarWrapper";
-import { type WorkflowAction, type ActionInput } from "@/lib/inngest/workflowActions";
+import { type WorkflowAction } from "@/lib/inngest/workflowActions";
 
 import {
   Dialog,
@@ -47,20 +45,17 @@ function Flow({ workflow }: { workflow: Workflow }) {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [connectStart, setConnectStart] = useState<OnConnectStartParams | null>(null);
   const [connectEnd, setConnectEnd] = useState<XYPosition | null>(null);
-  const [isDraggable, setIsDraggable] = useState(true);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [copiedNodes, setCopiedNodes] = useState<Node[]>([]);
   const [copiedNodesOriginalPositions, setCopiedNodesOriginalPositions] = useState<{ x: number, y: number }[]>([]);
   const [mousePosition, setMousePosition] = useState<{ x: number, y: number } | null>(null);
   const [isMouseOverFlow, setIsMouseOverFlow] = useState(false);
 
-  const { addNodes, project, getNode, setNodes, getViewport, setViewport } = useReactFlow();
+  const { addNodes, project, getNode, getViewport, setViewport } = useReactFlow();
   
   const {
     nodes,
@@ -72,7 +67,6 @@ function Flow({ workflow }: { workflow: Workflow }) {
     updateWorkflowMeta,
     getWorkflowData,
     workflowMeta,
-    updateWorkflowStatus
   } = useFlowStore();
 
   // Get the selected node
@@ -237,12 +231,14 @@ function Flow({ workflow }: { workflow: Workflow }) {
         // Initialize input values with defaults
         const inputValues: Record<string, string | number> = {};
         if (action.inputs) {
-          Object.entries(action.inputs).forEach(([key, input]: [string, ActionInput]) => {
+          Object.entries(action.inputs).forEach(([key, input]) => {
             if (input.default !== undefined) {
               if (input.type === 'boolean') {
                 inputValues[key] = String(input.default);
+              } else if (input.type === 'number') {
+                inputValues[key] = Number(input.default) || 0;
               } else {
-                inputValues[key] = input.default;
+                inputValues[key] = String(input.default || '');
               }
             }
           });
@@ -266,11 +262,6 @@ function Flow({ workflow }: { workflow: Workflow }) {
     [addNodes, project]
   );
 
-  // Handle navigation attempts
-  const handleNavigate = (path: string) => {
-    router.push(path);
-  };
-
   const onSaveWorkflow = async () => {
     try {
       setIsSaving(true);
@@ -290,27 +281,6 @@ function Flow({ workflow }: { workflow: Workflow }) {
     }
   };
 
-  const hasActions = selectedNodes.some(node => node.type === NODE_TYPES.action);
-
-  const handleToggleEnabled = async (enabled: boolean) => {
-    if (enabled && !hasActions) {
-      toast.error("Add at least one action before enabling the workflow");
-      return;
-    }
-
-    try {
-      await toggleWorkflow(workflowDraft.id, enabled);
-      updateWorkflowDraft({ ...workflowDraft, enabled });
-      updateWorkflowStatus(enabled);
-      if (enabled) {
-        setShowSuccessDialog(true);
-      }
-    } catch (error) {
-      toast.error("Failed to toggle workflow");
-      console.error("Failed to toggle workflow:", error);
-    }
-  };
-
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
@@ -324,7 +294,7 @@ function Flow({ workflow }: { workflow: Workflow }) {
     }
   };
 
-  const onConnectStart = useCallback((_: any, params: OnConnectStartParams) => {
+  const onConnectStart = useCallback((event: React.MouseEvent | React.TouchEvent, params: OnConnectStartParams) => {
     setConnectStart(params);
   }, []);
 
@@ -361,7 +331,7 @@ function Flow({ workflow }: { workflow: Workflow }) {
   }, [edges, nodes, originalOnConnect]);
 
   // Handle node deletion
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = useCallback(() => {
     if (selectedNodes.length === 0) return;
     
     const changes: NodeChange[] = selectedNodes.map(node => ({
@@ -369,7 +339,7 @@ function Flow({ workflow }: { workflow: Workflow }) {
       id: node.id,
     }));
     onNodesChange(changes);
-  };
+  }, [selectedNodes, onNodesChange]);
 
   // Add mouse position tracking
   const onMouseMove = useCallback((event: React.MouseEvent) => {
@@ -549,7 +519,7 @@ function Flow({ workflow }: { workflow: Workflow }) {
                   className="bg-muted/50"
                   multiSelectionKeyCode={["Control", "Meta"]}
                   selectionMode={SelectionMode.Full}
-                  selectionKeyCode={["Control", "Meta"]}
+                  selectionKeyCode={null}
                   deleteKeyCode={null}
                   proOptions={{ hideAttribution: true }}
                   panOnDrag={true}
@@ -683,38 +653,6 @@ function Flow({ workflow }: { workflow: Workflow }) {
               disabled={isDeleting}
             >
               {isDeleting ? "Deleting..." : "Delete Workflow"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Unsaved Changes Dialog */}
-      <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowUnsavedDialog(false);
-                setPendingNavigation(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setShowUnsavedDialog(false);
-                setPendingNavigation(null);
-              }}
-            >
-              Leave Without Saving
             </Button>
           </DialogFooter>
         </DialogContent>

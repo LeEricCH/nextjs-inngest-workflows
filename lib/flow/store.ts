@@ -74,18 +74,15 @@ export const useBlogPostStore = create<BlogPostState & BlogPostActions>()(
             const newState: Partial<BlogPostState> = { blogPost: updatedPost };
 
             // Update processing state based on status
-            if (post.status === 'processing') {
-              newState.isProcessing = true;
-            } else if (post.status) {
-              newState.isProcessing = false;
-            }
-
-            // Check for new AI recommendations
-            if (post.markdown_ai_revision && 
-                (!currentPost.markdown_ai_revision || 
-                 post.markdown_ai_revision !== currentPost.markdown_ai_revision)) {
-              newState.hasNewAIRecommendations = true;
-              newState.isProcessing = false;
+            if (post.status) {
+              newState.isProcessing = post.status === 'processing';
+              
+              // If we get a new status and it's not processing, check for AI recommendations
+              if (post.status !== 'processing' && post.markdown_ai_revision && 
+                  (!currentPost.markdown_ai_revision || 
+                   post.markdown_ai_revision !== currentPost.markdown_ai_revision)) {
+                newState.hasNewAIRecommendations = true;
+              }
             }
 
             return newState;
@@ -205,13 +202,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return true;
     });
 
-    const newNodes = applyNodeChanges(filteredChanges, get().nodes);
+    // Apply changes and force a new array reference
+    const newNodes = [...applyNodeChanges(filteredChanges, get().nodes)];
     set({ nodes: newNodes });
   },
   onEdgesChange: (changes) => {
-    set({
-      edges: applyEdgeChanges(changes, get().edges)
-    });
+    // Force a new array reference for edges too
+    const newEdges = [...applyEdgeChanges(changes, get().edges)];
+    set({ edges: newEdges });
   },
   onConnect: (connection) => {
     if (!connection.source || !connection.target) return;

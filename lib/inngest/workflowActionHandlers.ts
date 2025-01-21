@@ -12,14 +12,16 @@ function asWorkflowAction(action: InngestWorkflowAction): WorkflowAction {
   return action as unknown as WorkflowAction;
 }
 
+
 // helper to check if this is the final step before approval/completion
-function isFinalStep(step: any, workflowAction: InngestWorkflowAction) {
+function isFinalStep(step: unknown, workflowAction: InngestWorkflowAction) {
+  const typedStep = step as { workflow?: { edges: Array<{ from: string; to: string }> } };
   try {
     // Get workflow data from the step's workflow property
-    const edges = step?.workflow?.edges || [];
+    const edges = typedStep?.workflow?.edges || [];
     
     // Get outgoing edges from this step
-    const outgoingEdges = edges.filter((edge: any) => edge.from === workflowAction.kind);
+    const outgoingEdges = edges.filter((edge) => edge.from === workflowAction.kind);
     
     // If there are no outgoing edges, or the only outgoing edge is to wait_for_approval,
     // this is considered a final step
@@ -33,10 +35,15 @@ function isFinalStep(step: any, workflowAction: InngestWorkflowAction) {
 
 // helper to ensure that each step of the workflow use
 //  the original content or current AI revision
-function getAIworkingCopy(workflowAction: InngestWorkflowAction, blogPost: BlogPost, step: any) {
+function getAIworkingCopy(
+  workflowAction: InngestWorkflowAction, 
+  blogPost: BlogPost, 
+  step: unknown
+) {
+  const typedStep = step as { event?: { data?: { revision?: string } } };
   try {
     // First check if there's an intermediate revision from a previous step
-    const intermediateRevision = step?.event?.data?.revision;
+    const intermediateRevision = typedStep?.event?.data?.revision;
     
     // Use intermediate revision if available, otherwise fallback to AI revision or original
     return intermediateRevision || blogPost.markdown_ai_revision || blogPost.markdown;
@@ -218,12 +225,11 @@ export const actionsWithHandlers: EngineAction[] = [
     kind: "wait_for_approval",
     name: "Apply changes after approval",
     description: "Request approval for changes",
-    handler: async ({ event, step, workflowAction }) => {
+    handler: async ({ event, step }) => {
       // Skip review steps for published posts
       if (event.name === "blog-post.published") return;
 
       const supabase = createClient();
-      const action = asWorkflowAction(workflowAction);
 
       const blogPost = await step.run("load-blog-post", async () =>
         loadBlogPost(event.data.id)
@@ -597,6 +603,94 @@ export const actionsWithHandlers: EngineAction[] = [
               content: prompt,
             },
           ],
+        });
+
+        return response.choices[0]?.message?.content || "";
+      });
+
+      // Only save to DB if this is the final step before approval
+      if (isFinalStep(step, workflowAction)) {
+        await step.run("save-ai-revision", async () => {
+          await supabase
+            .from("blog_posts")
+            .update({
+              markdown_ai_revision: aiRevision,
+              status: "processing",
+            })
+            .eq("id", event.data.id)
+            .select("*");
+        });
+      } else {
+        await step.sendEvent("intermediate-revision", {
+          name: "blog-post.intermediate-revision",
+          data: {
+            id: event.data.id,
+            revision: aiRevision,
+            step: workflowAction.kind
+          }
+        });
+      }
+    },
+  },
+  {
+    kind: "ai_rewrite",
+    name: "AI Rewrite",
+    description: "Rewrite content using AI with custom style and tone",
+    handler: async ({ event, step, workflowAction }) => {
+      // Skip review steps for published posts
+      if (event.name === "blog-post.published") return;
+
+      const supabase = createClient();
+      const action = asWorkflowAction(workflowAction);
+
+      const blogPost = await step.run("load-blog-post", async () =>
+        loadBlogPost(event.data.id)
+      );
+
+      const aiRevision = await step.run("rewrite-content", async () => {
+        const openai = new OpenAI({
+          apiKey: process.env["OPENAI_API_KEY"],
+        });
+
+        const style = action.inputValues?.style ?? 'professional';
+        const tone = action.inputValues?.tone ?? 'friendly';
+        const rewriteLevel = action.inputValues?.rewriteLevel ?? 3;
+        const preserveKeywords = action.inputValues?.preserveKeywords ?? true;
+        const systemPrompt = action.inputValues?.systemPrompt ?? 
+          "You are an expert content writer who excels at maintaining the original meaning while improving clarity and engagement.";
+        const temperature = action.inputValues?.temperature ?? 0.7;
+        const maxTokens = action.inputValues?.maxTokens ?? 2000;
+
+        const prompt = `
+        Please rewrite the following article while:
+        1. Using a ${style} writing style
+        2. Maintaining a ${tone} tone
+        3. Applying a rewrite level of ${rewriteLevel} (1=light editing, 5=complete rewrite)
+        ${preserveKeywords ? '4. Preserving important keywords and technical terms' : ''}
+
+        Return only the rewritten article in markdown format.
+
+        Here is the article to rewrite:
+        Title: ${blogPost.title}
+        Subtitle: ${blogPost.subtitle}
+        Content:
+        ${getAIworkingCopy(workflowAction, blogPost, step)}
+        `;
+
+        const response = await openai.chat.completions.create({
+          model: process.env["OPENAI_MODEL"] || "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: String(systemPrompt),
+            },
+            {
+              role: "user",
+              content: String(prompt),
+            },
+          ],
+          temperature: Number(temperature),
+          max_tokens: Number(maxTokens),
         });
 
         return response.choices[0]?.message?.content || "";

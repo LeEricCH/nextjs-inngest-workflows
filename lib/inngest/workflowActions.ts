@@ -1,22 +1,27 @@
-import { type PublicEngineAction, type WorkflowAction as InngestWorkflowAction } from "@inngest/workflow-kit";
-
 export interface ActionInput {
   name: string;
   type: 'string' | 'number' | 'boolean';
   description: string;
   required?: boolean;
-  default?: any;
+  default?: unknown;
+  isAdvanced?: boolean;
 }
 
 // Extend the Inngest WorkflowAction type with our additional properties
-export interface WorkflowAction extends Omit<InngestWorkflowAction, 'inputValues'> {
-  inputs?: Record<string, ActionInput>;
-  inputValues?: Record<string, string | number>;
-  // Make required fields non-optional
+export interface WorkflowAction {
+  id: string;
   name: string;
   kind: string;
   description: string;
-  id: string;
+  inputs?: Record<string, {
+    name: string;
+    type: string;
+    description: string;
+    default?: string | number | boolean;
+    required?: boolean;
+    isAdvanced?: boolean;
+  }>;
+  inputValues?: Record<string, string | number | boolean>;
 }
 
 // Actions
@@ -187,6 +192,60 @@ export const actions: WorkflowAction[] = [
         type: "boolean",
         description: "Add example outputs as comments",
         default: true,
+      }
+    }
+  },
+  {
+    id: "ai_rewrite",
+    kind: "ai_rewrite",
+    name: "AI Rewrite",
+    description: "Rewrite content using AI with custom style and tone",
+    inputs: {
+      style: {
+        name: "Writing Style",
+        type: "string",
+        description: "The writing style to use (e.g., academic, casual, professional)",
+        default: "professional",
+      },
+      tone: {
+        name: "Tone",
+        type: "string",
+        description: "The tone of the writing (e.g., formal, friendly, authoritative)",
+        default: "friendly",
+      },
+      rewriteLevel: {
+        name: "Rewrite Level",
+        type: "number",
+        description: "How extensive the rewrite should be (1-5)",
+        default: 3,
+      },
+      preserveKeywords: {
+        name: "Preserve Keywords",
+        type: "boolean",
+        description: "Whether to preserve important keywords and phrases",
+        default: true,
+      },
+      // Advanced options
+      systemPrompt: {
+        name: "System Prompt",
+        type: "string",
+        description: "Custom system prompt for the AI",
+        default: "You are an expert content writer who excels at maintaining the original meaning while improving clarity and engagement.",
+        isAdvanced: true,
+      },
+      temperature: {
+        name: "Temperature",
+        type: "number",
+        description: "AI temperature (0.0-2.0). Lower values are more focused, higher more creative.",
+        default: 0.7,
+        isAdvanced: true,
+      },
+      maxTokens: {
+        name: "Max Tokens",
+        type: "number",
+        description: "Maximum number of tokens in the response",
+        default: 2000,
+        isAdvanced: true,
       }
     }
   }

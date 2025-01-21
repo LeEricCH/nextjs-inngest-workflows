@@ -80,6 +80,12 @@ ALTER TABLE ONLY "public"."blog_posts"
 ALTER TABLE ONLY "public"."workflows"
     ADD CONSTRAINT "workflows_pkey" PRIMARY KEY ("id");
 
+-- Create publication for real-time
+CREATE PUBLICATION supabase_realtime;
+
+-- Add blog_posts table to the publication
+ALTER PUBLICATION supabase_realtime ADD TABLE blog_posts;
+
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 GRANT USAGE ON SCHEMA "public" TO "postgres";

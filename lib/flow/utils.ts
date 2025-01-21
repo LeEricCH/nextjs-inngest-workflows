@@ -26,11 +26,24 @@ export function createActionNode(
   index: number,
   position?: { x: number; y: number }
 ): Node {
+  // Initialize inputValues with defaults from inputs
+  const inputValues: Record<string, string | number | boolean> = {};
+  if (action.inputs) {
+    Object.entries(action.inputs).forEach(([key, input]) => {
+      if (input.default !== undefined) {
+        inputValues[key] = input.type === 'boolean' ? Boolean(input.default) : input.default;
+      }
+    });
+  }
+
   return {
     id: nanoid(),
     type: NODE_TYPES.action,
     position: position || { x: 0, y: (index + 1) * NODE_HEIGHT },
-    data: action,
+    data: {
+      ...action,
+      inputValues: { ...inputValues, ...(action.inputValues || {}) },
+    },
   };
 }
 
@@ -43,23 +56,10 @@ export function workflowToFlow(workflow: Workflow): { nodes: Node[]; edges: Edge
     workflow.workflow.actions.forEach((action, index) => {
       const matchingAction = actions.find((a) => a.kind === action.kind);
       if (matchingAction) {
-        // Convert input values to the correct type based on the input definition
-        const inputValues: Record<string, string | number> = {};
-        if (action.inputValues && matchingAction.inputs) {
-          Object.entries(action.inputValues).forEach(([key, value]) => {
-            const input = matchingAction.inputs?.[key];
-            if (input?.type === 'boolean') {
-              inputValues[key] = String(value);
-            } else {
-              inputValues[key] = value as string | number;
-            }
-          });
-        }
-
         const node = createActionNode(
           {
             ...matchingAction,
-            inputValues,
+            inputValues: action.inputValues || {},
           },
           index,
           action.position
@@ -68,7 +68,7 @@ export function workflowToFlow(workflow: Workflow): { nodes: Node[]; edges: Edge
       }
     });
 
-    // Then create edges using action kinds
+    // Create edges
     if (workflow.workflow.edges) {
       workflow.workflow.edges.forEach((edge) => {
         if (edge.from && edge.to) {
@@ -116,6 +116,16 @@ export function flowToWorkflow(nodes: Node[], edges: Edge[]) {
   const actionNodes = nodes.filter((node) => node.type === NODE_TYPES.action);
   const triggerNode = nodes.find(node => node.type === NODE_TYPES.trigger);
   
+  // First, create a map of valid node IDs to their kinds
+  const nodeKindMap = new Map<string, string>();
+  nodes.forEach(node => {
+    if (node.type === NODE_TYPES.trigger) {
+      nodeKindMap.set(node.id, 'trigger');
+    } else {
+      nodeKindMap.set(node.id, node.data.kind);
+    }
+  });
+
   return {
     actions: actionNodes.map((node) => {
       // Convert any boolean values to strings
@@ -137,10 +147,18 @@ export function flowToWorkflow(nodes: Node[], edges: Edge[]) {
         inputValues,
       };
     }),
-    edges: edges.map((edge) => ({
-      from: edge.source === 'trigger' ? 'trigger' : nodes.find(n => n.id === edge.source)?.data.kind || edge.source,
-      to: nodes.find(n => n.id === edge.target)?.data.kind || edge.target,
-    })),
+    edges: edges
+      // Filter out edges where either source or target doesn't exist in our node map
+      .filter(edge => {
+        const sourceKind = edge.source === '$source' ? '$source' : nodeKindMap.get(edge.source);
+        const targetKind = nodeKindMap.get(edge.target);
+        return sourceKind && targetKind;
+      })
+      // Map to edge format using kinds instead of IDs
+      .map(edge => ({
+        from: edge.source === '$source' ? '$source' : nodeKindMap.get(edge.source)!,
+        to: nodeKindMap.get(edge.target)!,
+      })),
     triggerPosition: triggerNode?.position,
   };
 }

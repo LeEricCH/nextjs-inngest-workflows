@@ -9,20 +9,133 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { cn } from '@/lib/utils';
 import { NODE_TYPES } from '../utils';
 import { type WorkflowAction } from '@/lib/inngest/workflowActions';
 import { Button } from '@/components/ui/button';
+
+type InputValue = string | number | boolean;
+interface NodeInput {
+  name: string;
+  type: string;
+  description: string;
+  default?: InputValue;
+  required?: boolean;
+  isAdvanced?: boolean;
+}
 
 interface PropertiesSidebarProps {
   selectedNode: Node<WorkflowAction> | null;
   onNodeSelect: (nodeId: string) => void;
 }
 
+// Controlled input component that manages its own state
+function ControlledInput({ 
+  type, 
+  initialValue, 
+  onSave,
+  nodeId,
+  inputKey 
+}: { 
+  type: string;
+  initialValue: string | number | boolean;
+  onSave: (nodeId: string, key: string, value: string | number | boolean) => void;
+  nodeId: string;
+  inputKey: string;
+}) {
+  const [value, setValue] = useState(String(initialValue));
+  
+  // Update local state when initialValue changes
+  useEffect(() => {
+    setValue(String(initialValue));
+  }, [initialValue]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setValue(e.target.value);
+  };
+
+  const handleSave = () => {
+    let finalValue: string | number | boolean = value;
+    if (type === 'number' && value !== '') {
+      finalValue = Number(value);
+    } else if (type === 'boolean') {
+      finalValue = value === 'true';
+    }
+    onSave(nodeId, inputKey, finalValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    }
+  };
+
+  if (type === 'boolean') {
+    return (
+      <select
+        value={value}
+        onChange={handleChange}
+        onBlur={handleSave}
+        className="w-full h-8 px-2 rounded-md bg-muted/50 text-xs border-0 ring-1 ring-border/50 focus:ring-2 focus:ring-primary"
+      >
+        <option value="true">True</option>
+        <option value="false">False</option>
+      </select>
+    );
+  }
+
+  return (
+    <input
+      type={type === 'number' ? 'number' : 'text'}
+      value={value}
+      onChange={handleChange}
+      onBlur={handleSave}
+      onKeyDown={handleKeyDown}
+      className="w-full h-8 px-2 rounded-md bg-muted/50 text-xs border-0 ring-1 ring-border/50 focus:ring-2 focus:ring-primary"
+    />
+  );
+}
+
 export function PropertiesSidebar({ selectedNode, onNodeSelect }: PropertiesSidebarProps) {
   const { getNodes, setNodes, deleteElements, getEdges } = useReactFlow();
   const [nodes, setLocalNodes] = useState(getNodes());
   const selectedNodeRef = useRef<HTMLDivElement>(null);
+
+  // Keep local nodes in sync with React Flow nodes
+  useEffect(() => {
+    const nodes = getNodes();
+    setLocalNodes(nodes);
+    // If the selected node was deleted, clear the selection
+    if (selectedNode && !nodes.find(n => n.id === selectedNode.id)) {
+      onNodeSelect('');
+    }
+  }, [getNodes, selectedNode, onNodeSelect]);
+
+  const handleInputChange = useCallback((nodeId: string, inputKey: string, value: InputValue) => {
+    setNodes(nodes => {
+      return nodes.map(node => {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              inputValues: {
+                ...node.data.inputValues,
+                [inputKey]: value
+              }
+            }
+          };
+        }
+        return node;
+      });
+    });
+  }, [setNodes]);
 
   // Get node order based on connections
   const getNodeOrder = useCallback((nodeId: string): number => {
@@ -61,33 +174,6 @@ export function PropertiesSidebar({ selectedNode, onNodeSelect }: PropertiesSide
     }
   }, [selectedNode]);
 
-  // Keep local nodes in sync with React Flow nodes
-  useEffect(() => {
-    setLocalNodes(getNodes());
-  }, [getNodes]);
-
-  const handleInputChange = useCallback((nodeId: string, inputKey: string, value: string | number | boolean) => {
-    setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.id === nodeId) {
-          // Initialize or update the inputValues object in node data
-          const inputValues = node.data.inputValues || {};
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              inputValues: {
-                ...inputValues,
-                [inputKey]: value
-              }
-            }
-          };
-        }
-        return node;
-      })
-    );
-  }, [setNodes]);
-
   const handleDeleteNode = useCallback(() => {
     if (selectedNode) {
       // First clear the selection
@@ -98,9 +184,24 @@ export function PropertiesSidebar({ selectedNode, onNodeSelect }: PropertiesSide
         edges: []
       });
       // Update local nodes immediately
-      setLocalNodes(prev => prev.filter(node => node.id !== selectedNode.id));
+      const updatedNodes = getNodes().filter(node => node.id !== selectedNode.id);
+      setLocalNodes(updatedNodes);
     }
-  }, [selectedNode, deleteElements, onNodeSelect]);
+  }, [selectedNode, deleteElements, onNodeSelect, getNodes]);
+
+  const renderInput = (key: string, input: NodeInput, nodeId: string) => {
+    // Ensure we always have a valid value by providing empty string as fallback
+    const currentValue = selectedNode?.data.inputValues?.[key] ?? input.default ?? '';
+    return (
+      <ControlledInput
+        type={input.type}
+        initialValue={currentValue}
+        onSave={handleInputChange}
+        nodeId={nodeId}
+        inputKey={key}
+      />
+    );
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -203,57 +304,78 @@ export function PropertiesSidebar({ selectedNode, onNodeSelect }: PropertiesSide
                   {selectedNode.type === NODE_TYPES.action && selectedNode.data.inputs && 
                    Object.keys(selectedNode.data.inputs).length > 0 ? (
                     <div className="space-y-6">
-                      {Object.entries(selectedNode.data.inputs).map(([key, input]) => (
-                        <div key={key}>
-                          <div className="flex items-baseline justify-between mb-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <label className="text-sm font-medium text-foreground" htmlFor={key}>
-                                {input.name}
-                                {input.required && <span className="text-destructive">*</span>}
-                              </label>
-                              <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-1 rounded">
-                                {input.type}
-                              </span>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/70" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="text-xs">{input.description}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                      {/* Regular Inputs */}
+                      {Object.entries(selectedNode.data.inputs)
+                        .filter(([, input]) => !input.isAdvanced)
+                        .map(([key, input]) => (
+                          <div key={key}>
+                            <div className="flex items-baseline justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <label className="text-sm font-medium text-foreground" htmlFor={key}>
+                                  {input.name}
+                                  {input.required && <span className="text-destructive">*</span>}
+                                </label>
+                                <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-1 rounded">
+                                  {input.type}
+                                </span>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/70" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs">{input.description}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                             </div>
+                            {renderInput(key, input, selectedNode.id)}
                           </div>
-                          {input.type === 'boolean' ? (
-                            <select
-                              id={key}
-                              value={String(selectedNode.data.inputValues?.[key] ?? input.default)}
-                              onChange={(e) => {
-                                handleInputChange(selectedNode.id, key, e.target.value);
-                              }}
-                              className="w-full h-8 px-2 rounded-md bg-muted/50 text-xs border-0 ring-1 ring-border/50 focus:ring-2 focus:ring-primary"
-                            >
-                              <option value="true">True</option>
-                              <option value="false">False</option>
-                            </select>
-                          ) : (
-                            <input
-                              type={input.type === 'number' ? 'number' : 'text'}
-                              id={key}
-                              value={selectedNode.data.inputValues?.[key] ?? input.default}
-                              onChange={(e) => {
-                                const value = input.type === 'number' && e.target.value !== '' 
-                                  ? Number(e.target.value)
-                                  : e.target.value;
-                                handleInputChange(selectedNode.id, key, value);
-                              }}
-                              className="w-full h-8 px-2 rounded-md bg-muted/50 text-xs border-0 ring-1 ring-border/50 focus:ring-2 focus:ring-primary"
-                            />
-                          )}
-                        </div>
-                      ))}
+                        ))}
+
+                      {/* Advanced Inputs */}
+                      {Object.entries(selectedNode.data.inputs).some(([, input]) => input.isAdvanced) && (
+                        <Accordion type="single" collapsible className="w-full">
+                          <AccordionItem value="advanced-options">
+                            <AccordionTrigger className="text-sm font-medium">
+                              Advanced Options
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="space-y-6 pt-4">
+                                {Object.entries(selectedNode.data.inputs)
+                                  .filter(([, input]) => input.isAdvanced)
+                                  .map(([key, input]) => (
+                                    <div key={key}>
+                                      <div className="flex items-baseline justify-between mb-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="text-sm font-medium text-foreground" htmlFor={key}>
+                                            {input.name}
+                                            {input.required && <span className="text-destructive">*</span>}
+                                          </label>
+                                          <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-1 rounded">
+                                            {input.type}
+                                          </span>
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger>
+                                                <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/70" />
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                <p className="text-xs">{input.description}</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        </div>
+                                      </div>
+                                      {renderInput(key, input, selectedNode.id)}
+                                    </div>
+                                  ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      )}
                     </div>
                   ) : (
                     <div className="py-3 text-center text-sm text-muted-foreground">

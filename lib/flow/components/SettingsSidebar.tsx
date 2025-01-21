@@ -4,11 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { SaveIcon, Trash2, AlertCircle } from 'lucide-react';
+import { Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { type Workflow } from '@/lib/supabase/types';
-import { updateWorkflow, deleteWorkflow, toggleWorkflow } from '@/app/actions';
-import { Switch } from '@/components/ui/switch';
+import { deleteWorkflow, toggleWorkflow } from '@/app/actions';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useRouter } from 'next/navigation';
@@ -35,8 +34,7 @@ export function SettingsSidebar({ workflow, onWorkflowUpdate, hasActions = false
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [name, setName] = useState(workflow.name || '');
   const [description, setDescription] = useState(workflow.description || '');
-  const [isSaving, setIsSaving] = useState(false);
-  const { updateWorkflowMeta, getWorkflowData } = useFlowStore();
+  const { updateWorkflowMeta } = useFlowStore();
 
   const handleToggleEnabled = async (enabled: boolean) => {
     if (enabled && !hasActions) {
@@ -70,32 +68,18 @@ export function SettingsSidebar({ workflow, onWorkflowUpdate, hasActions = false
 
   // Update store (without saving) when fields change
   useEffect(() => {
-    updateWorkflowMeta({ name, description });
-  }, [name, description, updateWorkflowMeta]);
-
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      const workflowData = getWorkflowData();
-      await updateWorkflow({
-        ...workflow,
-        name,
-        description,
-        workflow: workflowData
-      });
+    // Debounce the update to avoid too many re-renders
+    const timeoutId = setTimeout(() => {
+      updateWorkflowMeta({ name, description });
       onWorkflowUpdate({
         ...workflow,
         name,
         description
       });
-      toast.success("Changes saved successfully");
-    } catch (error) {
-      console.error("Failed to save workflow:", error);
-      toast.error("Failed to save changes");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [name, description, updateWorkflowMeta, workflow, onWorkflowUpdate]);
 
   const handleDelete = async () => {
     try {
@@ -121,19 +105,9 @@ export function SettingsSidebar({ workflow, onWorkflowUpdate, hasActions = false
               Configure workflow settings
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="shrink-0 font-mono text-xs">
-              {workflow.id}
-            </Badge>
-            <Button 
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-            >
-              <SaveIcon className="h-4 w-4 mr-1" />
-              {isSaving ? "Saving..." : "Save"}
-            </Button>
-          </div>
+          <Badge variant="secondary" className="shrink-0 font-mono text-xs">
+            {workflow.id}
+          </Badge>
         </div>
       </div>
 

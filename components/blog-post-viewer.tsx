@@ -107,13 +107,25 @@ export function BlogPostViewer({ blogPost }: BlogPostViewerProps) {
       cleanup();
       clearTimeout(timer);
     };
-  }, [blogPost?.id]);
+  }, [blogPost, initializeRealtime, updateBlogPost]);
 
   // Update local markdown when currentBlogPost changes
   useEffect(() => {
+    // Skip if we're saving to prevent overwriting local changes during save
     if (!currentBlogPost?.markdown || isSaving) return;
-    setLocalMarkdown(currentBlogPost.markdown);
-  }, [currentBlogPost?.markdown, isSaving]);
+    
+    // Always update if status changed or AI revision came in
+    if (currentBlogPost.status !== previousStatus || currentBlogPost.markdown_ai_revision) {
+      setLocalMarkdown(currentBlogPost.markdown);
+      return;
+    }
+    
+    // For normal edits, only update if content changed and we're not mid-edit
+    const isEditing = localMarkdown !== blogPost.markdown;
+    if (!isEditing && currentBlogPost.markdown !== localMarkdown) {
+      setLocalMarkdown(currentBlogPost.markdown);
+    }
+  }, [currentBlogPost?.markdown, currentBlogPost?.status, currentBlogPost?.markdown_ai_revision, isSaving, localMarkdown, blogPost.markdown, previousStatus]);
 
   // Effect to check for AI recommendations on initial load and updates
   useEffect(() => {
@@ -126,9 +138,8 @@ export function BlogPostViewer({ blogPost }: BlogPostViewerProps) {
     } else {
       setHasNewAIRecommendations(false);
     }
-    // Update previous status
     setPreviousStatus(currentStatus);
-  }, [currentBlogPost?.markdown_ai_revision, currentBlogPost?.status, isProcessing, previousStatus]);
+  }, [currentBlogPost?.markdown_ai_revision, currentBlogPost?.status, isProcessing, previousStatus, setHasNewAIRecommendations]);
 
   // Handle scroll position when switching modes
   const handleModeSwitch = (toPreview: boolean) => {
@@ -176,7 +187,9 @@ export function BlogPostViewer({ blogPost }: BlogPostViewerProps) {
         // Only update local state, let realtime handle the rest
         toast.success('Changes saved');
       } else if (result.id) {
+        // Update the blog post with the returned data
         updateBlogPost(result);
+        toast.success('Changes saved');
       }
     } catch (error) {
       console.error('Failed to save post:', error);

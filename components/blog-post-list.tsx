@@ -19,52 +19,45 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type StatusType = "all" | "draft" | "needs approval" | "under review" | "published" | "processing";
 
-const StatsCard = ({ 
-  icon: Icon,
-  label,
-  count,
-  color,
-  isSelected,
-  onClick
-}: { 
+type StatsCardProps = { 
   icon: LucideIcon;
   label: string;
   count: number;
   color: string;
-  isSelected: boolean;
-  onClick: () => void;
-}) => (
-  <button 
-    onClick={onClick}
+};
+
+const StatsCard = ({ 
+  icon: Icon,
+  label,
+  count,
+  color
+}: StatsCardProps) => (
+  <div 
     className={cn(
-      "group relative overflow-hidden rounded-xl p-6 text-left transition-all hover:shadow-md",
-      isSelected 
-        ? `bg-${color}-100 dark:bg-${color}-900/20 ring-1 ring-${color}-500/30` 
-        : "bg-white hover:bg-gray-50 dark:bg-muted dark:hover:bg-muted/80",
+      "relative overflow-hidden rounded-xl bg-card border transition-all duration-200",
+      "hover:shadow-md hover:-translate-y-0.5"
     )}
   >
-    <div className={cn(
-      "absolute right-0 top-0 translate-x-1/3 -translate-y-1/3 transform",
-      `text-${color}-100 dark:text-${color}-900/20`
-    )}>
-      <Icon className="h-24 w-24" />
-    </div>
-    <div className="space-y-2">
+    <div className="flex items-center gap-4 p-6">
       <div className={cn(
-        "flex items-center gap-2 text-sm font-medium",
-        `text-${color}-600 dark:text-${color}-400`
+        "flex h-12 w-12 items-center justify-center rounded-lg transition-colors",
+        color === "blue" && "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+        color === "yellow" && "bg-yellow-50 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400",
+        color === "orange" && "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400",
+        color === "green" && "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400"
       )}>
-        <Icon className="h-4 w-4" />
-        {label}
+        <Icon className="h-6 w-6" />
       </div>
-      <div className={cn(
-        "text-3xl font-bold",
-        `text-${color}-600 dark:text-${color}-300`
-      )}>
-        {count}
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-muted-foreground">
+          {label}
+        </p>
+        <p className="text-2xl font-bold tracking-tight">
+          {count}
+        </p>
       </div>
     </div>
-  </button>
+  </div>
 );
 
 const StatsCardSkeleton = () => (
@@ -131,11 +124,11 @@ export const BlogPostList = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header Section */}
-      <div className="sticky top-0 z-10 backdrop-blur-xl bg-background/80 border-b">
-        <div className="px-6 py-6">
-          <div className="flex flex-col gap-8 max-w-[2000px] mx-auto">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
+      <div className="sticky top-0 z-10 backdrop-blur-xl bg-background/80 border-b shadow-sm">
+        <div className="px-8 py-8">
+          <div className="flex flex-col gap-10 max-w-[1800px] mx-auto">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+              <div className="space-y-2">
                 <h1 className="text-4xl font-bold tracking-tight">
                   Blog Posts
                 </h1>
@@ -143,14 +136,14 @@ export const BlogPostList = () => {
                   {blogPosts.length} posts in total
                 </p>
               </div>
-              <Button size="lg" className="gap-2">
+              <Button size="lg" className="gap-2 shadow-sm">
                 <PlusIcon className="h-5 w-5" />
                 Create New Post
               </Button>
             </div>
 
             {/* Stats Overview */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               {isLoading ? (
                 <>
                   <StatsCardSkeleton />
@@ -165,32 +158,24 @@ export const BlogPostList = () => {
                     label="Drafts"
                     count={stats.drafts}
                     color="blue"
-                    isSelected={selectedStatus === "draft"}
-                    onClick={() => handleStatusClick("draft")}
                   />
                   <StatsCard
                     icon={ClockIcon}
                     label="Needs Review"
                     count={stats.needsApproval}
                     color="yellow"
-                    isSelected={selectedStatus === "needs approval"}
-                    onClick={() => handleStatusClick("needs approval")}
                   />
                   <StatsCard
                     icon={RocketIcon}
                     label="Under Review"
                     count={stats.underReview}
                     color="orange"
-                    isSelected={selectedStatus === "under review"}
-                    onClick={() => handleStatusClick("under review")}
                   />
                   <StatsCard
                     icon={CheckCircleIcon}
                     label="Published"
                     count={stats.published}
                     color="green"
-                    isSelected={selectedStatus === "published"}
-                    onClick={() => handleStatusClick("published")}
                   />
                 </>
               )}
@@ -200,11 +185,12 @@ export const BlogPostList = () => {
       </div>
 
       {/* Content Section */}
-      <div className="px-6 py-8">
-        <div className="max-w-[2000px] mx-auto">
-          <div className="divide-y divide-border [&>*]:py-8">
+      <div className="px-8 py-10">
+        <div className="max-w-[1800px] mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             {isLoading ? (
               <>
+                <BlogPostItemSkeleton />
                 <BlogPostItemSkeleton />
                 <BlogPostItemSkeleton />
                 <BlogPostItemSkeleton />
@@ -215,8 +201,8 @@ export const BlogPostList = () => {
                   <BlogPostItem key={blogPost.id} blogPost={blogPost} index={index} />
                 ))}
                 {filteredPosts.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="text-muted-foreground">No posts found matching your criteria</div>
+                  <div className="text-center py-16 col-span-2">
+                    <div className="text-muted-foreground text-lg">No posts found matching your criteria</div>
                   </div>
                 )}
               </>
@@ -271,52 +257,83 @@ const BlogPostItem = ({ blogPost, index }: { blogPost: BlogPost; index: number }
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
+      className="h-full group"
     >
-      <div className="group relative">
-        <div className="absolute -inset-x-6 -inset-y-4 z-0 scale-95 bg-muted opacity-0 transition group-hover:scale-100 group-hover:opacity-100 sm:rounded-2xl" />
-        <Link 
-          href={`/blog-post/${blogPost.id}`}
-          className="relative z-10 flex flex-col gap-4"
-        >
+      <Link 
+        href={`/blog-post/${blogPost.id}`}
+        className="block h-full"
+      >
+        <div className="relative h-full bg-card rounded-xl border transition-all duration-200 
+          hover:shadow-lg hover:-translate-y-0.5 group-hover:border-primary/20">
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-r opacity-0 transition-opacity 
+            group-hover:opacity-5 dark:group-hover:opacity-10"
+            style={{
+              backgroundImage: `linear-gradient(to right, ${
+                blogPost.status === "published" ? '#22c55e' : 
+                blogPost.status === "needs approval" ? '#eab308' : 
+                blogPost.status === "under review" ? '#f97316' : '#3b82f6'
+              }, #3b82f6)`
+            }}
+          />
+          
           {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-3">
-              <Badge className={status.className}>
-                <StatusIcon className="w-3 h-3 mr-1" />
+          <div className="relative p-6 flex flex-col h-full">
+            <div className="flex items-center gap-3 mb-5">
+              <Badge 
+                className={cn(
+                  status.className,
+                  "px-3 py-1.5 text-sm font-medium transition-colors border",
+                  blogPost.status === "published" && "group-hover:bg-green-100 dark:group-hover:bg-green-900/70",
+                  blogPost.status === "needs approval" && "group-hover:bg-yellow-100 dark:group-hover:bg-yellow-900/70",
+                  blogPost.status === "under review" && "group-hover:bg-orange-100 dark:group-hover:bg-orange-900/70",
+                  blogPost.status === "draft" && "group-hover:bg-blue-100 dark:group-hover:bg-blue-900/70",
+                  blogPost.status === "processing" && "group-hover:bg-purple-100 dark:group-hover:bg-purple-900/70"
+                )}
+              >
+                <StatusIcon className="w-3.5 h-3.5 mr-2" />
                 {status.label}
               </Badge>
               {blogPost.ai_publishing_recommendations && (
-                <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-1.5 animate-ping" />
+                <Badge 
+                  className="bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 
+                    border-blue-200 px-3 py-1.5 text-sm font-medium transition-colors
+                    group-hover:bg-blue-100 dark:group-hover:bg-blue-900/70"
+                >
+                  <span className="w-2 h-2 rounded-full bg-blue-500 mr-2 animate-ping" />
                   AI
                 </Badge>
               )}
             </div>
-            <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-              {blogPost.title}
-            </h3>
-            <p className="text-muted-foreground line-clamp-2 mt-1">
-              {blogPost.subtitle}
-            </p>
-          </div>
 
-          {/* Meta Info */}
-          <div className="flex justify-end items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <CalendarIcon className="h-4 w-4" />
-              <span>{new Date(blogPost.created_at!).toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-              })}</span>
+            <div className="flex-grow">
+              <h3 className="text-xl font-semibold text-foreground transition-colors mb-3 group-hover:text-primary">
+                {blogPost.title}
+              </h3>
+              <p className="text-muted-foreground text-sm line-clamp-2 mb-6">
+                {blogPost.subtitle}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <MessageCircleIcon className="h-4 w-4" />
-              <span>0 comments</span>
+
+            {/* Meta Info */}
+            <div className="border-t pt-4">
+              <div className="flex justify-end items-center gap-6 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  <span>{new Date(blogPost.created_at!).toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MessageCircleIcon className="h-4 w-4" />
+                  <span>0 comments</span>
+                </div>
+              </div>
             </div>
           </div>
-        </Link>
-      </div>
+        </div>
+      </Link>
     </motion.div>
   );
 };

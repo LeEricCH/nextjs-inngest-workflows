@@ -52,7 +52,7 @@ export function ActionSelectionPopover({ position, sourceNodeId, onClose }: Acti
     if (action.inputs) {
       Object.entries(action.inputs).forEach(([key, input]) => {
         if (input.default !== undefined) {
-          if (input.type === 'boolean') {
+          if (typeof input.default === 'boolean') {
             inputValues[key] = String(input.default);
           } else {
             inputValues[key] = input.default;
@@ -127,9 +127,11 @@ export function ActionSelectionPopover({ position, sourceNodeId, onClose }: Acti
           }}
         >
           <div className="py-1">
-            <h3 className="text-md font-semibold">General Actions</h3>
+            <div className="px-3 pt-2 pb-1 mt-3 mb-3">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">General Actions</h3>
+            </div>
             {actions.filter(action => !['apply_changes', 'wait_for_approval'].includes(action.kind)).map((action, index) => (
-              <div key={action.kind}>
+              <div key={action.kind} className="mb-1">
                 <button
                   onClick={() => handleActionSelect(action)}
                   className="w-full flex items-start gap-2.5 px-3 py-2 text-sm hover:bg-accent/50 transition-colors"
@@ -145,13 +147,15 @@ export function ActionSelectionPopover({ position, sourceNodeId, onClose }: Acti
                   </div>
                 </button>
                 {index < actions.length - 1 && (
-                  <div className="mx-3 border-t border-border/40" />
+                  <div className="mx-3 my-1 border-t border-border/40" />
                 )}
               </div>
             ))}
-            <h3 className="text-md font-semibold">End Actions</h3>
+            <div className="px-3 pt-4 pb-1 mt-3 mb-3">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">End Actions</h3>
+            </div>
             {actions.filter(action => ['apply_changes', 'wait_for_approval'].includes(action.kind)).map((action, index) => (
-              <div key={action.kind}>
+              <div key={action.kind} className="mb-1">
                 <button
                   onClick={() => handleActionSelect(action)}
                   className="w-full flex items-start gap-2.5 px-3 py-2 text-sm hover:bg-accent/50 transition-colors"
@@ -167,7 +171,7 @@ export function ActionSelectionPopover({ position, sourceNodeId, onClose }: Acti
                   </div>
                 </button>
                 {index < actions.length - 1 && (
-                  <div className="mx-3 border-t border-border/40" />
+                  <div className="mx-3 my-1 border-t border-border/40" />
                 )}
               </div>
             ))}
